@@ -75,6 +75,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/kubeletconfig"
 	"k8s.io/kubernetes/pkg/kubelet/kuberuntime"
 	"k8s.io/kubernetes/pkg/kubelet/lifecycle"
+	"k8s.io/kubernetes/pkg/kubelet/log/logmanager"
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	"k8s.io/kubernetes/pkg/kubelet/metrics/collectors"
 	"k8s.io/kubernetes/pkg/kubelet/network"
@@ -921,6 +922,14 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 	if klet.gpuManager == nil {
 		klet.gpuManager = gpu.NewGPUManagerStub()
 	}
+
+	// create log plugin manager
+	logPluginManager, err := logmanager.NewLogPluginManagerImpl(kubeDeps.KubeClient, klet.recorder, klet.podManager, klet.configMapManager, klet.volumeManager)
+	if err != nil {
+		return nil, fmt.Errorf("create log plugin manager error, %v", err)
+	}
+	klet.logPluginManager = logPluginManager
+
 	// Finally, put the most recent version of the config on the Kubelet, so
 	// people can see how it was configured.
 	klet.kubeletConfiguration = *kubeCfg
@@ -1210,6 +1219,9 @@ type Kubelet struct {
 	// containerized should be set to true if the kubelet is running in a container
 	containerized bool
 
+	// Log Plugin Manager
+	logPluginManager logmanager.Manager
+
 	// This flag, if set, instructs the kubelet to keep volumes from terminated pods mounted to the node.
 	// This can be useful for debugging volume related issues.
 	keepTerminatedPodVolumes bool // DEPRECATED
@@ -1406,6 +1418,9 @@ func (kl *Kubelet) Run(updates <-chan kubetypes.PodUpdate) {
 	// Start component sync loops.
 	kl.statusManager.Start()
 	kl.probeManager.Start()
+
+	// Start log plugin manager
+	kl.logPluginManager.Start()
 
 	// Start the pod lifecycle event generator.
 	kl.pleg.Start()
@@ -1641,6 +1656,14 @@ func (kl *Kubelet) syncPod(o syncPodOptions) error {
 		if err := kl.volumeManager.WaitForAttachAndMount(pod); err != nil {
 			kl.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedMountVolume, "Unable to mount volumes for pod %q: %v", format.Pod(pod), err)
 			glog.Errorf("Unable to mount volumes for pod %q: %v; skipping pod", format.Pod(pod), err)
+			return err
+		}
+	}
+
+	if !kl.podIsTerminated(pod) {
+		if err := kl.logPluginManager.CreateLogPolicy(pod); err != nil {
+			kl.recorder.Eventf(pod, v1.EventTypeWarning, events.FailedCreatePodLogPolicy, "create log policy error, pod: %q: %v", format.Pod(pod), err)
+			glog.Errorf("create log policy error, pod: %q: %v", format.Pod(pod), err)
 			return err
 		}
 	}

@@ -852,6 +852,9 @@ func (kl *Kubelet) killPod(pod *v1.Pod, runningPod *kubecontainer.Pod, status *k
 	if err := kl.containerManager.UpdateQOSCgroups(); err != nil {
 		glog.V(2).Infof("Failed to update QoS cgroups while killing pod: %v", err)
 	}
+	if err := kl.logPluginManager.RemoveLogPolicy(pod); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -943,6 +946,11 @@ func (kl *Kubelet) PodResourcesAreReclaimed(pod *v1.Pod, status v1.PodStatus) bo
 	}
 	if len(runtimeStatus.ContainerStatuses) > 0 {
 		glog.V(3).Infof("Pod %q is terminated, but some containers have not been cleaned up: %+v", format.Pod(pod), runtimeStatus.ContainerStatuses)
+		return false
+	}
+	// pod's log should be collected
+	if !kl.logPluginManager.CollectFinished(pod) {
+		glog.V(3).Infof("Pod %q is terminated, but log collecting have not finished ", format.Pod(pod))
 		return false
 	}
 	if kl.podVolumesExist(pod.UID) && !kl.keepTerminatedPodVolumes {

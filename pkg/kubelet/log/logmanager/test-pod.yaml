@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: logplugin-test-pod
+  annotations:
+    "alpha.log.qiniu.com/log-policy": |
+      {
+        "log_plugin": "logkit",
+        "ensure_for_collected": false,
+        "container_log_policies": {
+          "container_1": [{
+            "category": "std",
+            "plugin_configmap": "container1-stdlog"
+          }, {
+            "category": "app",
+            "path": "/var/log/app",
+            "volume_name": "container1-applog",
+            "plugin_configmap": "container1-applog"
+          }, {
+            "category": "audit",
+            "path": "/var/log/audit",
+            "volume_name": "container1-auditlog",
+            "plugin_configmap": "container1-auditlog"
+          }],
+          "container_2": [{
+            "category": "app",
+            "path": "/var/log/app",
+            "volume_name": "container2-applog",
+            "plugin_config_map": "container2-applog"
+          }, {
+            "category": "audit",
+            "path": "/var/log/audit",
+            "volume_name": "container2-auditlog",
+            "plugin_configmap": "container2-auditlog"
+          }]
+        }
+      }
+spec:
+  containers:
+  - name: container1
+    image: bash
+    command:
+    - bash
+    - "-c"
+    - "i=\"0\"; while true; do echo \"`hostname`_container1_app: $i \"; date -Iseconds >> /var/log/app/container1.log; echo \"`hostname`_container1_audit: $i \"; date -Iseconds >> /var/log/audit/container1.log; sleep 4; i=$[$i+1]; done"
+    volumeMounts:
+    - name: container1-applog
+      mountPath: /var/log/app
+    - name: container1-auditlog
+      mountPath: /var/log/audit
+  - name: container2
+    image: bash
+    command:
+    - bash
+    - "-c"
+    - "i=\"0\"; while true; do echo \"`hostname`_container2_app: $i \"; date -Iseconds >> /var/log/app/container2.log; echo \"`hostname`_container2_audit: $i \"; date -Iseconds >> /var/log/audit/container2.log; sleep 4; i=$[$i+1]; done"
+    volumeMounts:
+    - name: container2-applog
+      mountPath: /var/log/app
+    - name: container2-auditlog
+      mountPath: /var/log/audit
+  volumes:
+  - name: container1-applog
+    emptyDir: {}
+  - name: container1-auditlog
+    emptyDir: {}
+  - name: container2-applog
+    emptyDir: {}
+  - name: container2-auditlog
+    emptyDir: {}
+  nodeName: ke-dev1-worker4

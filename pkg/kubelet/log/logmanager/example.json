@@ -1,0 +1,29 @@
+{
+  "alpha.log.qiniu.com/log-policy": {
+    "log_plugin": "logkit",
+    "ensure_for_collected": false,
+    "container_log_policies": {
+      "container_1": [{
+        "category": "std",
+        "plugin_config_map": "configmap-1-stdlog",
+      }, {
+        "category": "app",
+        "path": "/var/log/container-1/applog",
+        "plugin_config_map": "configmap-1-applog"
+      }, {
+        "category": "audit",
+        "path": "/var/log/container-1/auditlog",
+        "plugin_config_map": "configmap-1-auditlog"
+      }],
+      "container_2": [{
+        "category": "app",
+        "path": "/var/log/container-2/applog",
+        "plugin_config_map": "configmap-2-applog"
+      }, {
+        "category": "audit",
+        "path": "/var/log/container-2/auditlog",
+        "config": "configmap-2-auditlog"
+      }]
+    }
+  }
+}
